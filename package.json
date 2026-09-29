@@ -14,8 +14,11 @@
     "doctor-test": "npx tsx src/doctor-test.ts"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0",
-    "@types/node": "^20.0.0"
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.1"
   }
 }
