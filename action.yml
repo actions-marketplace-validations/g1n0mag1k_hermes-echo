@@ -1,0 +1,3 @@
+# Stub — Action implementation deferred
+name: 'Hermes Echo'
+description: 'Discover what your CLI actually does. Catch behavioral changes your tests missed.'

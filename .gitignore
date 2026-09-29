@@ -41,6 +41,15 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Hermes Echo run artifacts (contracts are tracked)
+.hermes/runs/
+
+# Python (testcli local installs)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 
