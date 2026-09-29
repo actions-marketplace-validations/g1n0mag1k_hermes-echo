@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { installProject } from './install.js'
+import { runnerPath } from './runner-env.js'
 import { discoverProbes } from './discover.js'
 
 export interface DoctorCheck {
@@ -46,7 +47,7 @@ function runCommand(
     const child = spawn(command, args, {
       cwd: options?.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env: { ...process.env, PATH: runnerPath() },
     })
 
     const timer = setTimeout(() => {

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { runnerPath } from './runner-env.js'
 
 export interface InstallResult {
   success: boolean
@@ -34,7 +35,7 @@ function runStrategy(strategy: Strategy): Promise<boolean> {
     const child = spawn(strategy.command, strategy.args, {
       cwd: strategy.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env: { ...process.env, PATH: runnerPath() },
     })
 
     const timer = setTimeout(() => {

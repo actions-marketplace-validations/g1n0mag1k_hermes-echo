@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { runnerPath } from './runner-env.js'
 import type { EchoObservation, EchoProbe } from './types.js'
 import { normalize } from './normalize.js'
 
@@ -33,7 +34,7 @@ const DAEMON_SKIP_REASON = 'potentially long-running or mutating command'
 
 function buildCleanEnv(): NodeJS.ProcessEnv {
   return {
-    PATH: process.env.PATH ?? '',
+    PATH: runnerPath(),
     HOME: process.env.HOME ?? '',
     TERM: 'dumb',
     NO_COLOR: '1',

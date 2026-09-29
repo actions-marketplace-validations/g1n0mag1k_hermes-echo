@@ -5,6 +5,14 @@ import type { EchoReceiptWithBase } from './diff.js'
 
 export const HERMES_ECHO_MARKER = '<!-- hermes-echo-marker -->'
 
+export interface ContractCommentStatus {
+  probe: string
+  matches: boolean
+  notes: string[]
+  /** Shown in the Contract column, e.g. "exit 0, stderr empty". */
+  behavior?: string
+}
+
 const COMMENT_MAX_LENGTH = 50_000
 const OUTPUT_TRUNCATE_AT = 400
 const OUTPUT_HEAD_CHARS = 200
@@ -100,6 +108,45 @@ function buildChangeComment(receipts: EchoReceipt[]): string {
   return sections.join('\n')
 }
 
+function buildContractsSection(contracts: ContractCommentStatus[]): string {
+  const verified = contracts.filter((c) => c.matches).length
+  const lines: string[] = [
+    '## Echo Contracts',
+    `${verified} of ${contracts.length} accepted contracts verified`,
+    '',
+    '| Probe | Contract | Status |',
+    '|-------|----------|--------|',
+  ]
+
+  for (const contract of contracts) {
+    const summary =
+      contract.behavior ??
+      (contract.matches ? 'per accepted contract' : '—')
+    const status = contract.matches ? '✓ HOLDS' : '✗ DRIFTED'
+    lines.push(`| ${contract.probe} | ${summary} | ${status} |`)
+    if (!contract.matches && contract.notes.length > 0) {
+      lines.push(`| | ${contract.notes.join('; ')} | |`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+function appendContractsSection(
+  body: string,
+  contracts: ContractCommentStatus[]
+): string {
+  if (contracts.length === 0) return body
+  const section = buildContractsSection(contracts)
+  const divider = '---'
+  const firstBreak = body.indexOf(divider)
+  if (firstBreak === -1) {
+    return `${body}\n\n${section}`
+  }
+  const insertAt = firstBreak + divider.length
+  return `${body.slice(0, insertAt)}\n\n${section}\n${body.slice(insertAt)}`
+}
+
 function buildVerifiedComment(receipts: EchoReceipt[]): string {
   const total = receipts.length
   const unchanged = receipts.filter((r) => r.classification === 'unchanged')
@@ -146,16 +193,23 @@ function enforceLengthLimit(body: string): string {
   return truncated
 }
 
-export function generateComment(receipts: EchoReceipt[]): string {
-  const hasChanges = receipts.some(
+export function generateComment(
+  receipts: EchoReceipt[],
+  contracts: ContractCommentStatus[] = []
+): string {
+  const receiptChanges = receipts.some(
     (r) =>
       r.classification === 'possible_change' ||
       r.classification === 'contract_violation'
   )
+  const contractDrift = contracts.some((c) => !c.matches)
+  const hasChanges = receiptChanges || contractDrift
 
-  const body = hasChanges
+  let body = hasChanges
     ? buildChangeComment(receipts)
     : buildVerifiedComment(receipts)
+
+  body = appendContractsSection(body, contracts)
 
   return enforceLengthLimit(body)
 }

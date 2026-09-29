@@ -41,8 +41,13 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Echo Contracts — commit these to track accepted behavioral baselines
+# .hermes/contracts/
+# (contracts are intentionally NOT ignored — they belong in version control)
+
 # Hermes Echo run artifacts (contracts are tracked)
 .hermes/runs/
+.hermes/sessions/
 
 # Python (testcli local installs)
 __pycache__/
