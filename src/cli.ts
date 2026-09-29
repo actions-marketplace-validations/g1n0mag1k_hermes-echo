@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { runDoctor, formatDoctorReport } from './doctor.js'
 import { discoverProbes } from './discover.js'
 import { executeProbe } from './execute.js'
@@ -124,11 +126,26 @@ async function runDoctorCommand(repoRoot: string, command: string) {
   }
 }
 
+function packageVersion(): string {
+  const pkgPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'package.json'
+  )
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string }
+  return pkg.version
+}
+
 async function main() {
   const argv = process.argv.slice(2)
   const subcommand = argv[0]
   const repoRoot = process.cwd()
   const rest = stripFlags(argv.slice(1))
+
+  if (subcommand === '--version' || subcommand === '-v') {
+    console.log(packageVersion())
+    process.exit(0)
+  }
 
   if (!subcommand || subcommand === '--help' || subcommand === '-h') {
     console.log(`hermes-echo — behavioral echo for CLIs

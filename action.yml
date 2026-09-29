@@ -1,3 +1,16 @@
-# Stub — Action implementation deferred
 name: 'Hermes Echo'
-description: 'Discover what your CLI actually does. Catch behavioral changes your tests missed.'
+description: 'Catch CLI behavior changes your tests missed — verify echo contracts on every pull request.'
+branding:
+  icon: activity
+  color: purple
+inputs:
+  command:
+    description: 'Console script name of your CLI (e.g. myapp from setup.py entry_points).'
+    required: true
+  github-token:
+    description: 'Token used to post or update the Hermes Echo PR comment.'
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: node20
+  main: dist/action.js

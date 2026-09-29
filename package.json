@@ -1,17 +1,40 @@
 {
   "name": "hermes-echo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Discover what your CLI actually does. Catch behavioral changes your tests missed.",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
     "hermes-echo": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "action.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/g1n0mag1k/hermes-echo.git"
+  },
+  "keywords": [
+    "cli",
+    "testing",
+    "github-actions",
+    "behavior",
+    "contracts",
+    "hermes-echo"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "dev": "tsc --watch",
-    "doctor-test": "npx tsx src/doctor-test.ts"
+    "doctor-test": "npx tsx src/doctor-test.ts",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
@@ -20,6 +43,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@actions/core": "^1.11.1",
     "@octokit/rest": "^22.0.1",
     "js-yaml": "^5.4.2"
   }
