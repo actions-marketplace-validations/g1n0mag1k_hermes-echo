@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "doctor-test": "npx tsx src/doctor-test.ts"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
