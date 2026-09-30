@@ -1,6 +1,6 @@
 # Hermes Echo
 
-[![npm version](https://img.shields.io/npm/v/@su1gener1s/hermes-echo.svg)](https://www.npmjs.com/package/@su1gener1s/hermes-echo)
+[![npm version](https://img.shields.io/npm/v/@hermes-tools/hermes-echo.svg)](https://www.npmjs.com/package/@hermes-tools/hermes-echo)
 [![GitHub release](https://img.shields.io/github/v/release/g1n0mag1k/hermes-echo)](https://github.com/g1n0mag1k/hermes-echo/releases)
 
 Discover what your CLI actually does. Catch behavioral changes your tests missed.
@@ -63,7 +63,7 @@ Real comment from [hermes-relay PR #10](https://github.com/g1n0mag1k/hermes-rela
 ## Local CLI usage
 
 ```bash
-npm install -g @su1gener1s/hermes-echo
+npm install -g @hermes-tools/hermes-echo
 hermes-echo doctor --command myapp
 hermes-echo accept
 hermes-echo accept validate

@@ -1,5 +1,5 @@
 {
-  "name": "@su1gener1s/hermes-echo",
+  "name": "@hermes-tools/hermes-echo",
   "version": "0.3.1",
   "description": "Discover what your CLI actually does. Catch behavioral changes your tests missed.",
   "type": "module",
