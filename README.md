@@ -7,7 +7,7 @@ Discover what your CLI actually does. Catch behavioral changes your tests missed
 
 ## What it does
 
-Hermes Echo finds your CLI’s console scripts from `setup.py` / `pyproject.toml`, including nested subcommands, and runs them like a user would. You accept the observed exit code, stdout, and stderr as Echo Contracts and commit them. On every pull request it re-runs those probes and comments when behavior drifts — it caught a version string change on [hermes-relay PR #10](https://github.com/g1n0mag1k/hermes-relay/pull/10) that tests missed.
+Hermes Echo finds your CLI’s console scripts from `setup.py` / `pyproject.toml`, including nested subcommands, and runs them like a user would. You accept the observed exit code, stdout, and stderr as Echo Contracts and commit them. On every pull request it re-runs those probes and comments when behavior drifts — with zero configuration it discovered and locked 30 behavioral contracts on [pypa/hatch](https://github.com/pypa/hatch).
 
 ## Quick start (GitHub Actions)
 
@@ -46,28 +46,27 @@ jobs:
 
 Accept contracts locally, commit `.hermes/contracts/`, and PR comments will show contract drift.
 
-Real comment from [hermes-relay PR #10](https://github.com/g1n0mag1k/hermes-relay/pull/10):
+Zero configuration against [pypa/hatch](https://github.com/pypa/hatch): Hermes Echo auto-discovered all 30 commands from `pyproject.toml` and locked exit code, stdout, and stderr — for example `hatch env show`:
 
-> ## 🔬 Hermes Echo · ECHO DETECTED A CHANGE
-> **7 probes executed** · **6 unchanged** · **1 possible changes** · **0 skipped**
->
-> ## Echo Contracts
-> 4 of 5 accepted contracts verified
->
-> | Probe | Contract | Status |
-> |-------|----------|--------|
-> | export-receipts | exit 2, stderr present | ✓ HOLDS |
-> | help | exit 0, stderr empty | ✓ HOLDS |
-> | keystore-init | exit 2, stderr present | ✓ HOLDS |
-> | keystore-public-key | exit 2, stderr present | ✓ HOLDS |
-> | version | exit 0, stderr empty | ✗ DRIFTED |
-> | | Stdout drifted: 1 line(s) changed | |
->
-> **Stdout diff** (`version`):
-> ```diff
-> -Hermes Relay v1.0.0
-> +Hermes Relay v1.0.1
-> ```
+```yaml
+# Echo Contract — accepted 2026-09-30T08:40:33.951Z
+probe: env-show
+command: hatch env show
+accepted_at: '2026-09-30T08:40:33.951Z'
+accepted_by: hermes-echo v0.3.5
+observations:
+  exit_code: 0
+  stdout: |
+    Standalone
+    ┏┳┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+    ┃┃┃ Dependencies                           ┃ Environment varia… ┃ Scripts      ┃
+    ┡╇╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+    │││ coverage[toml]>=6.2                    │                    │ combine      │
+    │││ mypy>=1.0.0                            │                    │ check        │
+    │││ mkdocs-material~=9.7.0                 │ PYTHONUNBUFFERED=1 │ serve        │
+    # ... 27 more rows
+  stderr: null
+```
 
 ## Handling nondeterministic output
 
