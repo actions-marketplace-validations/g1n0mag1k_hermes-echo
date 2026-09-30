@@ -5,6 +5,7 @@ import path from 'node:path'
 import {
   detectCommand,
   parsePyprojectConsoleScript,
+  parseSetupCfgConsoleScript,
   parseSetupPyConsoleScript,
   resolveCommandInput,
   NO_COMMAND_ERROR,
@@ -50,6 +51,15 @@ other = "demo.other:main"
     expect(parsePyprojectConsoleScript(content)).toBe('demo-cli')
   })
 
+  test('extracts from dotted scripts.name under [project]', () => {
+    const content = `
+[project]
+name = "tox"
+scripts.tox = "tox.run:run"
+`
+    expect(parsePyprojectConsoleScript(content)).toBe('tox')
+  })
+
   test('extracts from [tool.poetry.scripts]', () => {
     const content = `
 [tool.poetry]
@@ -59,6 +69,14 @@ name = "demo"
 poetapp = "demo.cli:main"
 `
     expect(parsePyprojectConsoleScript(content)).toBe('poetapp')
+  })
+
+  test('extracts from [tool.setuptools.entry-points."console_scripts"]', () => {
+    const content = `
+[tool.setuptools.entry-points."console_scripts"]
+stapp = "st.cli:main"
+`
+    expect(parsePyprojectConsoleScript(content)).toBe('stapp')
   })
 
   test('extracts from [project.entry-points."console_scripts"]', () => {
@@ -71,6 +89,32 @@ epapp = "ep.cli:main"
 
   test('returns null when no scripts tables', () => {
     expect(parsePyprojectConsoleScript('[project]\nname = "x"\n')).toBeNull()
+  })
+})
+
+describe('parseSetupCfgConsoleScript', () => {
+  test('extracts from setup.cfg console_scripts', () => {
+    const content = `
+[options.entry_points]
+console_scripts =
+    pre-commit = pre_commit.main:main
+    other = other.main:main
+`
+    expect(parseSetupCfgConsoleScript(content)).toBe('pre-commit')
+  })
+
+  test('extracts same-line console_scripts value', () => {
+    const content = `
+[options.entry_points]
+console_scripts = myapp = myapp.cli:main
+`
+    expect(parseSetupCfgConsoleScript(content)).toBe('myapp')
+  })
+
+  test('returns null when no console_scripts', () => {
+    expect(
+      parseSetupCfgConsoleScript('[options]\npackages = find:\n')
+    ).toBeNull()
   })
 })
 
@@ -95,7 +139,7 @@ setup(entry_points={'console_scripts': ['testcli=testcli.cli:main']})
     expect(await detectCommand(tmpDir)).toBe('testcli')
   })
 
-  test('detects from pyproject.toml when setup.py absent', async () => {
+  test('detects from pyproject.toml [project.scripts]', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'pyproject.toml'),
       `[project]
@@ -108,7 +152,50 @@ pyapp = "x.cli:main"
     expect(await detectCommand(tmpDir)).toBe('pyapp')
   })
 
-  test('prefers setup.py when both exist', async () => {
+  test('detects from pyproject.toml [tool.poetry.scripts]', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'pyproject.toml'),
+      `[tool.poetry.scripts]
+poetapp = "demo.cli:main"
+`
+    )
+    expect(await detectCommand(tmpDir)).toBe('poetapp')
+  })
+
+  test('detects from pyproject.toml [tool.setuptools] entry-points', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'pyproject.toml'),
+      `[tool.setuptools.entry-points."console_scripts"]
+stapp = "st.cli:main"
+`
+    )
+    expect(await detectCommand(tmpDir)).toBe('stapp')
+  })
+
+  test('detects from setup.cfg console_scripts', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'setup.cfg'),
+      `[options.entry_points]
+console_scripts =
+    cfgapp = cfg.cli:main
+`
+    )
+    expect(await detectCommand(tmpDir)).toBe('cfgapp')
+  })
+
+  test('detects from setup.cfg when setup.py has empty setup()', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'setup.py'), 'from setuptools import setup\nsetup()\n')
+    fs.writeFileSync(
+      path.join(tmpDir, 'setup.cfg'),
+      `[options.entry_points]
+console_scripts =
+    pre-commit = pre_commit.main:main
+`
+    )
+    expect(await detectCommand(tmpDir)).toBe('pre-commit')
+  })
+
+  test('prefers setup.py when both setup.py and pyproject.toml exist', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'setup.py'),
       `setup(entry_points={'console_scripts': ['from-setup=a:b']})`
@@ -118,6 +205,13 @@ pyapp = "x.cli:main"
       `[project.scripts]\nfrom-toml = "a:b"\n`
     )
     expect(await detectCommand(tmpDir)).toBe('from-setup')
+  })
+
+  test('returns null when no scripts found anywhere', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'setup.py'), 'setup(name="x")\n')
+    fs.writeFileSync(path.join(tmpDir, 'pyproject.toml'), '[project]\nname = "x"\n')
+    fs.writeFileSync(path.join(tmpDir, 'setup.cfg'), '[metadata]\nname = x\n')
+    expect(await detectCommand(tmpDir)).toBeNull()
   })
 
   test('resolveCommandInput uses explicit command without discovery', async () => {

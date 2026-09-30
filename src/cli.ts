@@ -33,14 +33,13 @@ function stripFlags(args: string[]): string[] {
 async function resolveCommand(
   repoRoot: string,
   extraArgs: string[]
-): Promise<string> {
+): Promise<{ command: string; discovered: boolean }> {
   const fromFlag = parseFlag(extraArgs, '--command')
   try {
-    const { command } = await resolveCommandInput(repoRoot, fromFlag)
-    return command
+    return await resolveCommandInput(repoRoot, fromFlag)
   } catch {
     throw new Error(
-      'Could not detect CLI command. Pass --command <name> (console script from setup.py or pyproject.toml).'
+      'Could not detect CLI command. Pass --command <name> (console script from setup.py, pyproject.toml, or setup.cfg).'
     )
   }
 }
@@ -133,8 +132,12 @@ async function runAccept(repoRoot: string, command: string, probeArg?: string) {
   console.log('  Written to .hermes/contracts/')
 }
 
-async function runDoctorCommand(repoRoot: string, command: string) {
-  const report = await runDoctor(command, repoRoot)
+async function runDoctorCommand(
+  repoRoot: string,
+  command: string,
+  discovered: boolean
+) {
+  const report = await runDoctor(command, repoRoot, { discovered })
   console.log(formatDoctorReport(report))
   if (!report.ready) {
     process.exit(1)
@@ -170,16 +173,16 @@ Usage:
   hermes-echo accept [probe-name] [--command <name>]
 
 Options:
-  --command   Console script name (default: from setup.py / pyproject.toml)
+  --command   Console script name (default: from setup.py / pyproject.toml / setup.cfg)
 `)
     process.exit(0)
   }
 
-  const command = await resolveCommand(repoRoot, argv)
+  const { command, discovered } = await resolveCommand(repoRoot, argv)
 
   switch (subcommand) {
     case 'doctor':
-      await runDoctorCommand(repoRoot, command)
+      await runDoctorCommand(repoRoot, command, discovered)
       break
     case 'accept':
       await runAccept(repoRoot, command, rest[0])

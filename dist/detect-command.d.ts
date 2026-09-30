@@ -6,14 +6,26 @@
  */
 export declare function parseSetupPyConsoleScript(content: string): string | null;
 /**
- * Parse the first script from pyproject.toml [project.scripts] or
- * [tool.poetry.scripts] tables.
+ * Parse the first script from pyproject.toml:
+ *   [project.scripts]
+ *   scripts.name = "..."  (dotted PEP 621 under [project])
+ *   [tool.poetry.scripts]
+ *   [tool.setuptools.entry-points."console_scripts"]
+ *   [project.entry-points."console_scripts"]
  */
 export declare function parsePyprojectConsoleScript(content: string): string | null;
-export declare const NO_COMMAND_ERROR = "No command specified and no console_scripts found in setup.py or pyproject.toml. Add 'command: myapp' to your workflow.";
 /**
- * Detect the first console script name from setup.py or pyproject.toml
- * in the repository root. Prefer setup.py when both exist.
+ * Parse console_scripts from setup.cfg [options.entry_points].
+ *
+ *   [options.entry_points]
+ *   console_scripts =
+ *       pre-commit = pre_commit.main:main
+ */
+export declare function parseSetupCfgConsoleScript(content: string): string | null;
+export declare const NO_COMMAND_ERROR = "No command specified and no console_scripts found in setup.py, pyproject.toml, or setup.cfg. Add 'command: myapp' to your workflow.";
+/**
+ * Detect the first console script name from setup.py, pyproject.toml, or
+ * setup.cfg in the repository root. Prefer setup.py when it defines scripts.
  */
 export declare function detectCommand(repoRoot: string): Promise<string | null>;
 /**

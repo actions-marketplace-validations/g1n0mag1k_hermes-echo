@@ -105,7 +105,8 @@ function pipVersionLabel(output: string): string {
 
 export async function runDoctor(
   command: string,
-  repoRoot: string
+  repoRoot: string,
+  options?: { discovered?: boolean }
 ): Promise<DoctorReport> {
   const checks: DoctorCheck[] = []
 
@@ -162,11 +163,12 @@ export async function runDoctor(
   const finder = process.platform === 'win32' ? 'where' : 'which'
   const which = await runCommand(finder, [command])
   const whichOk = which.exitCode === 0
+  const autoSuffix = options?.discovered ? ' (auto-detected)' : ''
   checks.push({
     name: 'Command found in PATH',
     passed: whichOk,
     detail: whichOk
-      ? `${command} found in PATH`
+      ? `${command} found in PATH${autoSuffix}`
       : `${command} not found in PATH`,
     fix: whichOk
       ? undefined

@@ -11,5 +11,7 @@ export interface DoctorReport {
     qualifyingProbeCount: number;
     estimatedRuntimeSeconds: number;
 }
-export declare function runDoctor(command: string, repoRoot: string): Promise<DoctorReport>;
+export declare function runDoctor(command: string, repoRoot: string, options?: {
+    discovered?: boolean;
+}): Promise<DoctorReport>;
 export declare function formatDoctorReport(report: DoctorReport): string;

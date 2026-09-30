@@ -72,7 +72,7 @@ function pipVersionLabel(output) {
     const match = output.trim().match(/^pip\s+\S+/i);
     return match ? match[0] : 'pip';
 }
-export async function runDoctor(command, repoRoot) {
+export async function runDoctor(command, repoRoot, options) {
     const checks = [];
     // CHECK 1: Git repository
     const gitOk = await hasGitAt(repoRoot);
@@ -123,11 +123,12 @@ export async function runDoctor(command, repoRoot) {
     const finder = process.platform === 'win32' ? 'where' : 'which';
     const which = await runCommand(finder, [command]);
     const whichOk = which.exitCode === 0;
+    const autoSuffix = options?.discovered ? ' (auto-detected)' : '';
     checks.push({
         name: 'Command found in PATH',
         passed: whichOk,
         detail: whichOk
-            ? `${command} found in PATH`
+            ? `${command} found in PATH${autoSuffix}`
             : `${command} not found in PATH`,
         fix: whichOk
             ? undefined
