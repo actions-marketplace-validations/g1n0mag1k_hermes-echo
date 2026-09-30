@@ -1,23 +1,12 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runDoctor, formatDoctorReport } from './doctor.js';
 import { discoverProbes } from './discover.js';
 import { executeProbe } from './execute.js';
 import { probeNameFromProbe, readContract, writeContract, } from './contracts.js';
-async function detectCommand(repoRoot) {
-    const setupPath = path.join(repoRoot, 'setup.py');
-    try {
-        const content = await fs.readFile(setupPath, 'utf8');
-        const match = content.match(/console_scripts['"]\s*:\s*\[\s*['"]([^'"]+)['"]/);
-        return match?.[1] ?? null;
-    }
-    catch {
-        return null;
-    }
-}
+import { resolveCommandInput } from './detect-command.js';
 function parseFlag(args, flag) {
     const index = args.indexOf(flag);
     if (index === -1 || index + 1 >= args.length)
@@ -37,12 +26,13 @@ function stripFlags(args) {
 }
 async function resolveCommand(repoRoot, extraArgs) {
     const fromFlag = parseFlag(extraArgs, '--command');
-    if (fromFlag)
-        return fromFlag;
-    const detected = await detectCommand(repoRoot);
-    if (detected)
-        return detected;
-    throw new Error('Could not detect CLI command. Pass --command <name> (console script from setup.py).');
+    try {
+        const { command } = await resolveCommandInput(repoRoot, fromFlag);
+        return command;
+    }
+    catch {
+        throw new Error('Could not detect CLI command. Pass --command <name> (console script from setup.py or pyproject.toml).');
+    }
 }
 async function runAccept(repoRoot, command, probeArg) {
     const report = await runDoctor(command, repoRoot);
@@ -50,8 +40,10 @@ async function runAccept(repoRoot, command, probeArg) {
         console.log(formatDoctorReport(report));
         process.exit(1);
     }
+    // Named accept: no probe cap. Accept-all: default 30-probe limit.
     const discovery = await discoverProbes(command, repoRoot, {
         minConfidence: 70,
+        ...(probeArg ? { maxProbes: Number.MAX_SAFE_INTEGER } : {}),
     });
     const probes = discovery.probes;
     const acceptProbe = async (probe) => {
@@ -143,7 +135,7 @@ Usage:
   hermes-echo accept [probe-name] [--command <name>]
 
 Options:
-  --command   Console script name (default: from setup.py entry point)
+  --command   Console script name (default: from setup.py / pyproject.toml)
 `);
         process.exit(0);
     }

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
-import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runDoctor, formatDoctorReport } from './doctor.js'
@@ -11,19 +10,7 @@ import {
   readContract,
   writeContract,
 } from './contracts.js'
-
-async function detectCommand(repoRoot: string): Promise<string | null> {
-  const setupPath = path.join(repoRoot, 'setup.py')
-  try {
-    const content = await fs.readFile(setupPath, 'utf8')
-    const match = content.match(
-      /console_scripts['"]\s*:\s*\[\s*['"]([^'"]+)['"]/
-    )
-    return match?.[1] ?? null
-  } catch {
-    return null
-  }
-}
+import { resolveCommandInput } from './detect-command.js'
 
 function parseFlag(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag)
@@ -48,12 +35,14 @@ async function resolveCommand(
   extraArgs: string[]
 ): Promise<string> {
   const fromFlag = parseFlag(extraArgs, '--command')
-  if (fromFlag) return fromFlag
-  const detected = await detectCommand(repoRoot)
-  if (detected) return detected
-  throw new Error(
-    'Could not detect CLI command. Pass --command <name> (console script from setup.py).'
-  )
+  try {
+    const { command } = await resolveCommandInput(repoRoot, fromFlag)
+    return command
+  } catch {
+    throw new Error(
+      'Could not detect CLI command. Pass --command <name> (console script from setup.py or pyproject.toml).'
+    )
+  }
 }
 
 async function runAccept(repoRoot: string, command: string, probeArg?: string) {
@@ -63,8 +52,10 @@ async function runAccept(repoRoot: string, command: string, probeArg?: string) {
     process.exit(1)
   }
 
+  // Named accept: no probe cap. Accept-all: default 30-probe limit.
   const discovery = await discoverProbes(command, repoRoot, {
     minConfidence: 70,
+    ...(probeArg ? { maxProbes: Number.MAX_SAFE_INTEGER } : {}),
   })
   const probes = discovery.probes
 
@@ -179,7 +170,7 @@ Usage:
   hermes-echo accept [probe-name] [--command <name>]
 
 Options:
-  --command   Console script name (default: from setup.py entry point)
+  --command   Console script name (default: from setup.py / pyproject.toml)
 `)
     process.exit(0)
   }

@@ -22,6 +22,7 @@ import {
   type ContractCommentStatus,
 } from './github.js'
 import type { EchoObservation, EchoProbe, EchoReceipt } from './types.js'
+import { resolveCommandInput } from './detect-command.js'
 
 function execGit(
   args: string[],
@@ -178,11 +179,26 @@ function applyContractViolations(
 }
 
 async function run(): Promise<void> {
-  const command = core.getInput('command', { required: true })
   const token =
     core.getInput('github-token') || process.env.GITHUB_TOKEN || ''
   const repoRoot = process.env.GITHUB_WORKSPACE || process.cwd()
   process.chdir(repoRoot)
+
+  let command: string
+  try {
+    const resolved = await resolveCommandInput(
+      repoRoot,
+      core.getInput('command') || undefined
+    )
+    command = resolved.command
+    if (resolved.discovered) {
+      core.info(`Discovered command: ${command}`)
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    core.setFailed(message)
+    return
+  }
 
   core.info('Installing project for Hermes Echo…')
   const install = await installProject(repoRoot)
@@ -262,8 +278,8 @@ async function run(): Promise<void> {
     ) || contractStatuses.some((c) => !c.matches)
 
   if (hasChanges) {
-    core.setFailed(
-      'Hermes Echo detected behavioral changes or contract drift'
+    core.info(
+      'Hermes Echo detected behavioral changes or contract drift (reported; not failing CI)'
     )
   } else {
     core.info('Hermes Echo verified — no unexplained behavioral changes')

@@ -5,8 +5,8 @@ branding:
   color: purple
 inputs:
   command:
-    description: 'Console script name of your CLI (e.g. myapp from setup.py entry_points).'
-    required: true
+    description: 'Console script name to probe. Auto-detected from setup.py/pyproject.toml if not specified.'
+    required: false
   github-token:
     description: 'Token used to post or update the Hermes Echo PR comment.'
     required: false

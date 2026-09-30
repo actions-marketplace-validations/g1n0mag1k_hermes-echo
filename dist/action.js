@@ -11,6 +11,7 @@ import { executeProbe } from './execute.js';
 import { diffObservations } from './diff.js';
 import { compareToContract, contractBehaviorSummary, listContracts, probeNameFromProbe, readContract, } from './contracts.js';
 import { generateComment, upsertPRComment, } from './github.js';
+import { resolveCommandInput } from './detect-command.js';
 function execGit(args, cwd) {
     return new Promise((resolve) => {
         let stderr = '';
@@ -130,10 +131,22 @@ function applyContractViolations(receipts, contractStatuses) {
     });
 }
 async function run() {
-    const command = core.getInput('command', { required: true });
     const token = core.getInput('github-token') || process.env.GITHUB_TOKEN || '';
     const repoRoot = process.env.GITHUB_WORKSPACE || process.cwd();
     process.chdir(repoRoot);
+    let command;
+    try {
+        const resolved = await resolveCommandInput(repoRoot, core.getInput('command') || undefined);
+        command = resolved.command;
+        if (resolved.discovered) {
+            core.info(`Discovered command: ${command}`);
+        }
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        core.setFailed(message);
+        return;
+    }
     core.info('Installing project for Hermes Echo…');
     const install = await installProject(repoRoot);
     if (!install.success) {
@@ -184,7 +197,7 @@ async function run() {
     const hasChanges = receipts.some((r) => r.classification === 'possible_change' ||
         r.classification === 'contract_violation') || contractStatuses.some((c) => !c.matches);
     if (hasChanges) {
-        core.setFailed('Hermes Echo detected behavioral changes or contract drift');
+        core.info('Hermes Echo detected behavioral changes or contract drift (reported; not failing CI)');
     }
     else {
         core.info('Hermes Echo verified — no unexplained behavioral changes');

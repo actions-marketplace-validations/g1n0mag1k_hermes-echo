@@ -18,6 +18,10 @@ name: Hermes Echo
 on:
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   echo:
     runs-on: ubuntu-latest
@@ -28,14 +32,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: g1n0mag1k/hermes-echo@v0.3.1
-        with:
-          command: myapp
+      # Zero-config (auto-detects your console script):
+      - uses: g1n0mag1k/hermes-echo@v0.3.2
+      # Explicit:
+      # - uses: g1n0mag1k/hermes-echo@v0.3.2
+      #   with:
+      #     command: myapp
 ```
 
-Replace `myapp` with your console script name. Accept contracts locally, commit `.hermes/contracts/`, and PR comments will show contract drift.
+`pull-requests: write` is required to post the drift comment on your PR.
 
-## What you'll see in your PR
+`fetch-depth: 0` is required because Hermes Echo executes probes against both the PR branch and its base revision.
+
+Accept contracts locally, commit `.hermes/contracts/`, and PR comments will show contract drift.
 
 Real comment from [hermes-relay PR #10](https://github.com/g1n0mag1k/hermes-relay/pull/10):
 
@@ -60,6 +69,14 @@ Real comment from [hermes-relay PR #10](https://github.com/g1n0mag1k/hermes-rela
 > +Hermes Relay v1.0.1
 > ```
 
+## Handling nondeterministic output
+
+Hermes Echo normalizes timestamps, UUIDs, and absolute paths before comparing observations. Commands that produce different output on every run (daemons, servers, interactive prompts) are automatically skipped.
+
+## Does behavioral drift fail CI?
+
+No. Hermes Echo always exits 0. It reports drift as a PR comment but does not block merging. You decide what to do with the information.
+
 ## Local CLI usage
 
 ```bash
@@ -77,6 +94,6 @@ hermes-echo accept validate
 
 ## Compliance
 
-Accepted Echo Contracts are version-controlled records of observed CLI behavior — what exited, what printed, and when you accepted it. That gives regulated teams durable audit evidence aligned with 21 CFR Part 11 and GAMP 5 expectations for documented, reviewable system behavior.
+Accepted Echo Contracts are version-controlled records of observed CLI behavior — what exited, what printed, and when you accepted it. Teams with formal software validation requirements may find version-controlled behavioral contracts useful as supporting evidence.
 
 Built by [Hermes Relay](https://hermesrelay.dev)
