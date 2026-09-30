@@ -1,6 +1,6 @@
 {
   "name": "@hermes-tools/hermes-echo",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Discover what your CLI actually does. Catch behavioral changes your tests missed.",
   "type": "module",
   "main": "dist/cli.js",
