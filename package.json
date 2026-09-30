@@ -1,6 +1,6 @@
 {
-  "name": "hermes-echo",
-  "version": "0.3.0",
+  "name": "@su1gener1s/hermes-echo",
+  "version": "0.3.1",
   "description": "Discover what your CLI actually does. Catch behavioral changes your tests missed.",
   "type": "module",
   "main": "dist/cli.js",
