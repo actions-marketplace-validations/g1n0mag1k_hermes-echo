@@ -33,9 +33,9 @@ jobs:
         with:
           python-version: '3.12'
       # Zero-config (auto-detects your console script):
-      - uses: g1n0mag1k/hermes-echo@v0.3.4
+      - uses: g1n0mag1k/hermes-echo@v0.3.5
       # Explicit:
-      # - uses: g1n0mag1k/hermes-echo@v0.3.4
+      # - uses: g1n0mag1k/hermes-echo@v0.3.5
       #   with:
       #     command: myapp
 ```
