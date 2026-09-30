@@ -141,6 +141,20 @@ function buildContractStatuses(
       matches: comparison.matches,
       notes: comparison.notes,
       behavior,
+      ...(comparison.stdoutMatch
+        ? {}
+        : {
+            expectedStdout: contract.observations.stdout ?? '',
+            actualStdout: observation.stdout,
+            stdoutDiff: comparison.stdoutDiff,
+          }),
+      ...(comparison.stderrMatch
+        ? {}
+        : {
+            expectedStderr: contract.observations.stderr ?? '',
+            actualStderr: observation.stderr,
+            stderrDiff: comparison.stderrDiff,
+          }),
     })
   }
 

@@ -100,9 +100,41 @@ describe('writeContract and readContract', () => {
     const raw = fs.readFileSync(path.join(tmpDir, written), 'utf8')
     const parsed = yamlLoad(raw.replace(/^#.*\n/, '')) as Contract
     expect(parsed.observations.exit_code).toBe(0)
+    expect(parsed.observations.stdout).toBe('Configuration valid')
+    expect(parsed.observations.stderr).toBeNull()
     expect(parsed.command).toBe('testcli validate fixtures/valid.yml')
     expect(parsed.accepted_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(parsed.accepted_by).toMatch(/^hermes-echo v/)
+  })
+
+  test('stores full multiline stdout, not a 60-char hint', () => {
+    const probe = makeProbe(['app', 'report'])
+    const longStdout = Array.from({ length: 20 }, (_, i) => `line ${i}: detail`).join(
+      '\n'
+    )
+    expect(longStdout.length).toBeGreaterThan(60)
+
+    writeContract(probe, makeObservation(probe, 0, longStdout, ''))
+    const contract = readContract('report')
+    expect(contract?.observations.stdout).toBe(longStdout)
+    expect(contract?.observations.stdout?.length).toBe(longStdout.length)
+  })
+
+  test('stores full stderr when present', () => {
+    const probe = makeProbe(['app', 'warn'])
+    const stderr = 'warning: deprecated flag\nwarning: slow path'
+    writeContract(probe, makeObservation(probe, 0, 'ok', stderr))
+    const contract = readContract('warn')
+    expect(contract?.observations.stderr).toBe(stderr)
+    expect(contract?.observations.stdout).toBe('ok')
+  })
+
+  test('stores null for empty stdout and stderr', () => {
+    const probe = makeProbe(['app', 'silent'])
+    writeContract(probe, makeObservation(probe, 0, '', ''))
+    const contract = readContract('silent')
+    expect(contract?.observations.stdout).toBeNull()
+    expect(contract?.observations.stderr).toBeNull()
   })
 
   test('readContract returns null for missing file', () => {
@@ -158,37 +190,103 @@ describe('compareToContract', () => {
     accepted_by: 'hermes-echo v0.1.0',
     observations: {
       exit_code: 0,
-      stdout_pattern: 'ok',
-      stderr_empty: true,
+      stdout: 'ok\nall good',
+      stderr: null,
     },
     notes: '',
   }
 
-  test('matches when exit code and stderr match', () => {
+  test('matches when exit code, stdout, and stderr match', () => {
     const probe = makeProbe(['testcli', 'validate'])
-    const observation = makeObservation(probe, 0, 'ok', '')
+    const observation = makeObservation(probe, 0, 'ok\nall good', '')
     const result = compareToContract(contract, observation)
     expect(result.matches).toBe(true)
     expect(result.exitCodeMatch).toBe(true)
+    expect(result.stdoutMatch).toBe(true)
     expect(result.stderrMatch).toBe(true)
     expect(result.notes).toHaveLength(0)
   })
 
   test('detects exit code mismatch', () => {
     const probe = makeProbe(['testcli', 'validate'])
-    const observation = makeObservation(probe, 1, 'ok', '')
+    const observation = makeObservation(probe, 1, 'ok\nall good', '')
     const result = compareToContract(contract, observation)
     expect(result.matches).toBe(false)
     expect(result.exitCodeMatch).toBe(false)
     expect(result.notes.some((n) => n.includes('Exit code'))).toBe(true)
   })
 
-  test('detects stderr_empty mismatch', () => {
+  test('detects stdout drift with line-by-line diff', () => {
     const probe = makeProbe(['testcli', 'validate'])
-    const observation = makeObservation(probe, 0, 'ok', 'warning')
+    const observation = makeObservation(probe, 0, 'ok\nchanged', '')
+    const result = compareToContract(contract, observation)
+    expect(result.matches).toBe(false)
+    expect(result.stdoutMatch).toBe(false)
+    expect(result.stdoutDiff.changed.length).toBeGreaterThan(0)
+    expect(result.notes.some((n) => n.includes('Stdout drifted'))).toBe(true)
+  })
+
+  test('detects stdout added lines', () => {
+    const probe = makeProbe(['testcli', 'validate'])
+    const observation = makeObservation(probe, 0, 'ok\nall good\nextra', '')
+    const result = compareToContract(contract, observation)
+    expect(result.stdoutMatch).toBe(false)
+    expect(result.stdoutDiff.added).toEqual(['extra'])
+    expect(result.stdoutDiff.unchanged).toBe(2)
+  })
+
+  test('detects stdout removed lines', () => {
+    const probe = makeProbe(['testcli', 'validate'])
+    const observation = makeObservation(probe, 0, 'ok', '')
+    const result = compareToContract(contract, observation)
+    expect(result.stdoutMatch).toBe(false)
+    expect(result.stdoutDiff.removed).toEqual(['all good'])
+  })
+
+  test('detects stderr drift', () => {
+    const probe = makeProbe(['testcli', 'validate'])
+    const observation = makeObservation(probe, 0, 'ok\nall good', 'boom')
     const result = compareToContract(contract, observation)
     expect(result.matches).toBe(false)
     expect(result.stderrMatch).toBe(false)
-    expect(result.notes.some((n) => n.includes('Stderr'))).toBe(true)
+    expect(result.stderrDiff.added).toEqual(['boom'])
+    expect(result.notes.some((n) => n.includes('Stderr drifted'))).toBe(true)
+  })
+
+  test('detects stderr content change when both non-empty', () => {
+    const withStderr: Contract = {
+      ...contract,
+      observations: {
+        exit_code: 0,
+        stdout: 'ok',
+        stderr: 'old warning',
+      },
+    }
+    const probe = makeProbe(['testcli', 'validate'])
+    const observation = makeObservation(probe, 0, 'ok', 'new warning')
+    const result = compareToContract(withStderr, observation)
+    expect(result.stderrMatch).toBe(false)
+    expect(result.stderrDiff.changed).toContain('old warning → new warning')
+  })
+
+  test('treats normalized-equivalent stdout as a match', () => {
+    const withTs: Contract = {
+      ...contract,
+      observations: {
+        exit_code: 0,
+        stdout: 'done at 2026-01-15T10:30:00Z',
+        stderr: null,
+      },
+    }
+    const probe = makeProbe(['testcli', 'validate'])
+    const observation = makeObservation(
+      probe,
+      0,
+      'done at 2026-01-16T11:00:00Z',
+      ''
+    )
+    const result = compareToContract(withTs, observation)
+    expect(result.stdoutMatch).toBe(true)
+    expect(result.matches).toBe(true)
   })
 })

@@ -79,4 +79,100 @@ describe('generateComment contracts', () => {
     ])
     expect(body).toContain('ECHO DETECTED A CHANGE')
   })
+
+  test('shows stdout diff as a git-style diff block when drifted', () => {
+    const body = generateComment([receipt('unchanged')], [
+      {
+        probe: 'validate',
+        matches: false,
+        notes: ['Stdout drifted: 1 line(s) changed'],
+        behavior: 'exit 0, stderr empty',
+        expectedStdout: 'Configuration valid\n3 checks passed',
+        actualStdout: 'Configuration valid\n4 checks passed',
+        stdoutDiff: {
+          added: [],
+          removed: [],
+          changed: ['3 checks passed → 4 checks passed'],
+          unchanged: 1,
+        },
+      },
+    ])
+    expect(body).toContain('**Stdout diff** (`validate`):')
+    expect(body).toContain('```diff')
+    expect(body).toContain('-3 checks passed')
+    expect(body).toContain('+4 checks passed')
+  })
+
+  test('shows stderr diff as a git-style diff block when drifted', () => {
+    const body = generateComment([receipt('unchanged')], [
+      {
+        probe: 'validate',
+        matches: false,
+        notes: ['Stderr drifted: 1 line(s) added'],
+        behavior: 'exit 0, stderr present',
+        expectedStderr: '',
+        actualStderr: 'error: missing region',
+        stderrDiff: {
+          added: ['error: missing region'],
+          removed: [],
+          changed: [],
+          unchanged: 0,
+        },
+      },
+    ])
+    expect(body).toContain('**Stderr diff** (`validate`):')
+    expect(body).toContain('```diff')
+    expect(body).toContain('+error: missing region')
+  })
+
+  test('does not render diff block when contract holds', () => {
+    const body = generateComment([receipt('unchanged')], [
+      {
+        probe: 'validate',
+        matches: true,
+        notes: [],
+        behavior: 'exit 0, stderr empty',
+        expectedStdout: 'ok',
+        actualStdout: 'ok',
+        stdoutDiff: { added: [], removed: [], changed: [], unchanged: 1 },
+      },
+    ])
+    expect(body).not.toContain('```diff')
+    expect(body).not.toContain('Stdout diff')
+  })
+
+  test('renders both stdout and stderr diffs for a drifted probe', () => {
+    const body = generateComment([receipt('unchanged')], [
+      {
+        probe: 'convert',
+        matches: false,
+        notes: [
+          'Stdout drifted: 1 line(s) changed',
+          'Stderr drifted: 1 line(s) added',
+        ],
+        behavior: 'exit 0, stderr empty',
+        expectedStdout: 'Converted 3 records',
+        actualStdout: 'Converted 4 records',
+        expectedStderr: '',
+        actualStderr: 'warn: slow',
+        stdoutDiff: {
+          added: [],
+          removed: [],
+          changed: ['Converted 3 records → Converted 4 records'],
+          unchanged: 0,
+        },
+        stderrDiff: {
+          added: ['warn: slow'],
+          removed: [],
+          changed: [],
+          unchanged: 0,
+        },
+      },
+    ])
+    expect(body).toContain('**Stdout diff** (`convert`):')
+    expect(body).toContain('-Converted 3 records')
+    expect(body).toContain('+Converted 4 records')
+    expect(body).toContain('**Stderr diff** (`convert`):')
+    expect(body).toContain('+warn: slow')
+  })
 })

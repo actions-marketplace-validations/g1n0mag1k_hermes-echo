@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { probeNameFromProbe } from './contracts.js'
 import type { EchoProbe } from './types.js'
 import { DAEMON_KEYWORDS, executeProbe } from './execute.js'
 
@@ -37,9 +38,12 @@ const README_NAMES = ['README.md', 'README.rst', 'README.txt']
 const MAX_FIXTURES_PER_SUBCOMMAND = 5
 const MAX_README_PROBES = 10
 const MAX_TEST_PROBES = 10
+/** Timeout for each discovery confirmation probe */
+const DISCOVERY_TIMEOUT_MS = 5_000
 
 const COMMANDS_HEADER = /Commands:|Subcommands:|Available commands:/i
-const COMMAND_LINE = /^\s{2,4}(\w[\w-]*)\s/
+// Match "  <word>  " lines (Click/Typer/argparse command listings)
+const COMMAND_LINE = /^\s{2,4}(\w[\w-]*)\s{2,}/
 const CLICK_BRACE = /\{([^{}]+)\}/
 const SHELL_VAR = /\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*/
 const FENCE = /```[^\n]*\n([\s\S]*?)```/g
@@ -48,7 +52,7 @@ function hasDaemonArg(args: string[]): boolean {
   return args.slice(1).some((arg) => DAEMON_KEYWORDS.includes(arg))
 }
 
-function parseSubcommandsFromHelp(helpText: string): string[] {
+export function parseSubcommandsFromHelp(helpText: string): string[] {
   const found = new Set<string>()
   const lines = helpText.split(/\r?\n/)
 
@@ -58,11 +62,15 @@ function parseSubcommandsFromHelp(helpText: string): string[] {
       inCommands = true
       continue
     }
-    if (inCommands) {
-      const match = line.match(COMMAND_LINE)
-      if (match) {
-        found.add(match[1])
-      }
+    // End of a commands section (new top-level help heading)
+    if (inCommands && /^[A-Za-z][\w\s]*:$/.test(line.trim())) {
+      inCommands = false
+    }
+
+    // Prefer Commands:/Subcommands: sections; also accept "  <word>  " lines
+    const match = line.match(COMMAND_LINE)
+    if (match && (inCommands || /^\s{2,4}\w[\w-]*\s{2,}\S/.test(line))) {
+      found.add(match[1])
     }
 
     const brace = line.match(CLICK_BRACE)
@@ -314,12 +322,15 @@ export async function discoverProbes(
     source: 'baseline',
   })
 
-  // LEVEL 1 — --help parsing
-  const helpObs = await executeProbe({
-    args: [command, '--help'],
-    confidence: 90,
-    source: 'baseline',
-  })
+  // LEVEL 1 — --help parsing (top-level + one nested level)
+  const helpObs = await executeProbe(
+    {
+      args: [command, '--help'],
+      confidence: 90,
+      source: 'baseline',
+    },
+    { timeoutMs: DISCOVERY_TIMEOUT_MS }
+  )
   const helpText = `${helpObs.stdout}\n${helpObs.stderr}`
   const discoveredSubcommands = parseSubcommandsFromHelp(helpText)
 
@@ -335,11 +346,14 @@ export async function discoverProbes(
       continue
     }
 
-    const confirm = await executeProbe({
-      args: [command, sub, '--help'],
-      confidence: 50,
-      source: 'baseline',
-    })
+    const confirm = await executeProbe(
+      {
+        args: [command, sub, '--help'],
+        confidence: 70,
+        source: 'baseline',
+      },
+      { timeoutMs: DISCOVERY_TIMEOUT_MS }
+    )
 
     if (
       confirm.skipped ||
@@ -350,11 +364,58 @@ export async function discoverProbes(
       continue
     }
 
-    candidates.push({
-      args: bareArgs,
-      confidence: 70,
-      source: 'baseline',
-    })
+    // ONE level deep only — parse nested from this help, do not recurse further
+    const nestedHelp = `${confirm.stdout}\n${confirm.stderr}`
+    const nestedSubs = parseSubcommandsFromHelp(nestedHelp)
+    let addedNested = 0
+
+    for (const nested of nestedSubs) {
+      const nestedArgs = [command, sub, nested]
+
+      if (DAEMON_KEYWORDS.includes(nested)) {
+        skipped.push({
+          args: nestedArgs,
+          confidence: 50,
+          source: 'baseline',
+        })
+        continue
+      }
+
+      const nestedConfirm = await executeProbe(
+        {
+          args: [command, sub, nested, '--help'],
+          confidence: 70,
+          source: 'baseline',
+        },
+        { timeoutMs: DISCOVERY_TIMEOUT_MS }
+      )
+
+      if (
+        nestedConfirm.skipped ||
+        nestedConfirm.timedOut ||
+        nestedConfirm.exitCode === null ||
+        nestedConfirm.exitCode !== 0
+      ) {
+        continue
+      }
+
+      // Intentionally do NOT parse nestedConfirm help for deeper commands
+      candidates.push({
+        args: nestedArgs,
+        confidence: 70,
+        source: 'baseline',
+      })
+      addedNested++
+    }
+
+    // Prefer nested leaves over bare parent groups (e.g. "hatch env" exits 2)
+    if (addedNested === 0) {
+      candidates.push({
+        args: bareArgs,
+        confidence: 70,
+        source: 'baseline',
+      })
+    }
   }
 
   // LEVEL 2 — fixture file pairing
@@ -398,6 +459,13 @@ export async function discoverProbes(
 
   const probes = allCandidates
     .filter((p) => p.confidence >= minConfidence)
+    // Reject flags, filenames, and paths used as probe names
+    .filter((p) => {
+      const name = probeNameFromProbe(p)
+      if (name === 'help') return true
+      if (name.startsWith('--') || name.includes('--')) return false
+      return !name.includes('.') && !name.includes('/')
+    })
     .slice(0, maxProbes)
 
   return {

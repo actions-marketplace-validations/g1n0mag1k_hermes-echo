@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dump as yamlDump, load as yamlLoad } from 'js-yaml';
+import { structuredDiff } from './diff.js';
+import { areEquivalent } from './normalize.js';
 const PROBE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 function projectRoot() {
     return process.env.HERMES_ECHO_PROJECT_ROOT ?? process.cwd();
@@ -14,12 +16,29 @@ function packageVersionLabel() {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     return `hermes-echo v${pkg.version}`;
 }
+function storeOutput(text) {
+    return text === '' ? null : text;
+}
+function outputValue(value) {
+    return (value ?? '').replace(/\r\n/g, '\n').replace(/\n+$/, '');
+}
 export function probeNameFromProbe(probe) {
-    const subcommand = probe.args[1];
-    if (!subcommand || subcommand === '--help') {
+    const parts = [];
+    for (let i = 1; i < probe.args.length; i++) {
+        const arg = probe.args[i];
+        if (!arg || arg === '--help') {
+            break;
+        }
+        // Stop before flags, paths, and filenames — those are probe args, not names
+        if (arg.startsWith('-') || arg.includes('.') || arg.includes('/')) {
+            break;
+        }
+        parts.push(arg);
+    }
+    if (parts.length === 0) {
         return 'help';
     }
-    return subcommand;
+    return parts.join('-');
 }
 export function contractPath(probeName) {
     if (!probeName) {
@@ -36,12 +55,6 @@ function contractFileAbs(probeName) {
 export function ensureContractsDir() {
     mkdirSync(contractsDirAbs(), { recursive: true });
 }
-function stdoutPattern(stdout) {
-    const trimmed = stdout.replace(/\n+$/, '');
-    if (trimmed === '')
-        return null;
-    return trimmed.slice(0, 60);
-}
 export function writeContract(probe, observation) {
     if (observation.exitCode === null || observation.exitCode === undefined) {
         throw new Error('Cannot write contract: probe has not been executed successfully');
@@ -55,8 +68,8 @@ export function writeContract(probe, observation) {
         accepted_by: packageVersionLabel(),
         observations: {
             exit_code: observation.exitCode,
-            stdout_pattern: stdoutPattern(observation.stdout),
-            stderr_empty: observation.stderr.replace(/\s+$/, '') === '',
+            stdout: storeOutput(observation.stdout),
+            stderr: storeOutput(observation.stderr),
         },
         notes: '',
     };
@@ -93,25 +106,72 @@ export function listContracts() {
 export function compareToContract(contract, observation) {
     const exitCodeMatch = observation.exitCode !== null &&
         observation.exitCode === contract.observations.exit_code;
-    const stderrEmpty = observation.stderr.replace(/\s+$/, '') === '';
-    const stderrMatch = stderrEmpty === contract.observations.stderr_empty;
+    const expectedStdout = outputValue(contract.observations.stdout);
+    const expectedStderr = outputValue(contract.observations.stderr);
+    const actualStdout = outputValue(observation.stdout);
+    const actualStderr = outputValue(observation.stderr);
+    const stdoutMatch = areEquivalent(expectedStdout, actualStdout);
+    const stderrMatch = areEquivalent(expectedStderr, actualStderr);
+    const emptyDiff = (text) => ({
+        added: [],
+        removed: [],
+        changed: [],
+        unchanged: text === '' ? 0 : text.split('\n').length,
+    });
+    const stdoutDiff = stdoutMatch
+        ? emptyDiff(expectedStdout)
+        : structuredDiff(expectedStdout, actualStdout);
+    const stderrDiff = stderrMatch
+        ? emptyDiff(expectedStderr)
+        : structuredDiff(expectedStderr, actualStderr);
     const notes = [];
     if (!exitCodeMatch) {
         notes.push(`Exit code was ${observation.exitCode ?? 'unknown'}, contract expects ${contract.observations.exit_code}`);
     }
+    if (!stdoutMatch) {
+        const parts = [];
+        if (stdoutDiff.removed.length > 0) {
+            parts.push(`${stdoutDiff.removed.length} line(s) removed`);
+        }
+        if (stdoutDiff.added.length > 0) {
+            parts.push(`${stdoutDiff.added.length} line(s) added`);
+        }
+        if (stdoutDiff.changed.length > 0) {
+            parts.push(`${stdoutDiff.changed.length} line(s) changed`);
+        }
+        notes.push(parts.length > 0
+            ? `Stdout drifted: ${parts.join(', ')}`
+            : 'Stdout drifted from accepted contract');
+    }
     if (!stderrMatch) {
-        const observed = stderrEmpty ? 'empty' : 'present';
-        const expected = contract.observations.stderr_empty ? 'empty' : 'present';
-        notes.push(`Stderr was ${observed}, contract expects ${expected}`);
+        const parts = [];
+        if (stderrDiff.removed.length > 0) {
+            parts.push(`${stderrDiff.removed.length} line(s) removed`);
+        }
+        if (stderrDiff.added.length > 0) {
+            parts.push(`${stderrDiff.added.length} line(s) added`);
+        }
+        if (stderrDiff.changed.length > 0) {
+            parts.push(`${stderrDiff.changed.length} line(s) changed`);
+        }
+        notes.push(parts.length > 0
+            ? `Stderr drifted: ${parts.join(', ')}`
+            : 'Stderr drifted from accepted contract');
     }
     return {
-        matches: exitCodeMatch && stderrMatch,
+        matches: exitCodeMatch && stdoutMatch && stderrMatch,
         exitCodeMatch,
+        stdoutMatch,
         stderrMatch,
         notes,
+        stdoutDiff,
+        stderrDiff,
     };
 }
 export function contractBehaviorSummary(contract) {
-    const stderr = contract.observations.stderr_empty ? 'empty' : 'present';
+    const stderr = contract.observations.stderr === null ||
+        contract.observations.stderr.replace(/\s+$/, '') === ''
+        ? 'empty'
+        : 'present';
     return `exit ${contract.observations.exit_code}, stderr ${stderr}`;
 }

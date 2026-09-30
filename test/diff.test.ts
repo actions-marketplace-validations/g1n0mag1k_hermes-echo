@@ -1,5 +1,10 @@
 import { describe, test, expect } from 'vitest'
-import { diffObservations } from '../src/diff.js'
+import {
+  diffLines,
+  diffObservations,
+  formatDiffBlock,
+  structuredDiff,
+} from '../src/diff.js'
 import { normalize } from '../src/normalize.js'
 import type { EchoObservation, EchoProbe } from '../src/types.js'
 
@@ -106,5 +111,80 @@ describe('diff', () => {
     )
     const receipt = diffObservations(probe, base, head)
     expect(receipt.classification).toBe('unchanged')
+  })
+})
+
+describe('diffLines', () => {
+  test('identical strings produce no added or removed lines', () => {
+    const result = diffLines('a\nb\nc', 'a\nb\nc')
+    expect(result.added).toEqual([])
+    expect(result.removed).toEqual([])
+    expect(result.unchanged).toBe(3)
+  })
+
+  test('detects added lines', () => {
+    const result = diffLines('a\nb', 'a\nb\nc')
+    expect(result.added).toEqual(['c'])
+    expect(result.removed).toEqual([])
+    expect(result.unchanged).toBe(2)
+  })
+
+  test('detects removed lines', () => {
+    const result = diffLines('a\nb\nc', 'a\nc')
+    expect(result.removed).toEqual(['b'])
+    expect(result.added).toEqual([])
+    expect(result.unchanged).toBe(2)
+  })
+
+  test('detects mixed add and remove', () => {
+    const result = diffLines('keep\nold\nkeep', 'keep\nnew\nkeep')
+    expect(result.removed).toEqual(['old'])
+    expect(result.added).toEqual(['new'])
+    expect(result.unchanged).toBe(2)
+  })
+
+  test('empty before becomes all added', () => {
+    const result = diffLines('', 'hello\nworld')
+    expect(result.added).toEqual(['hello', 'world'])
+    expect(result.removed).toEqual([])
+    expect(result.unchanged).toBe(0)
+  })
+
+  test('empty after becomes all removed', () => {
+    const result = diffLines('hello\nworld', '')
+    expect(result.removed).toEqual(['hello', 'world'])
+    expect(result.added).toEqual([])
+    expect(result.unchanged).toBe(0)
+  })
+
+  test('trailing newlines do not create phantom empty lines', () => {
+    const result = diffLines('a\nb\n', 'a\nb')
+    expect(result.added).toEqual([])
+    expect(result.removed).toEqual([])
+    expect(result.unchanged).toBe(2)
+  })
+})
+
+describe('structuredDiff', () => {
+  test('coalesces adjacent remove+add into changed', () => {
+    const result = structuredDiff('line one\nline two', 'line one\nline TWO')
+    expect(result.changed).toEqual(['line two → line TWO'])
+    expect(result.added).toEqual([])
+    expect(result.removed).toEqual([])
+    expect(result.unchanged).toBe(1)
+  })
+})
+
+describe('formatDiffBlock', () => {
+  test('formats as a git-style diff fence', () => {
+    const block = formatDiffBlock('old line', 'new line', '**Stdout diff**:')
+    expect(block).toContain('**Stdout diff**:')
+    expect(block).toContain('```diff')
+    expect(block).toContain('-old line')
+    expect(block).toContain('+new line')
+  })
+
+  test('returns empty string when there is no drift', () => {
+    expect(formatDiffBlock('same', 'same')).toBe('')
   })
 })

@@ -24,6 +24,8 @@ export const DAEMON_KEYWORDS = [
     'migrate',
     'reset',
     'sync',
+    'shell',
+    'test',
 ];
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DAEMON_SKIP_REASON = 'potentially long-running or mutating command';

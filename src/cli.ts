@@ -75,6 +75,18 @@ async function runAccept(repoRoot: string, command: string, probeArg?: string) {
       console.log(`↺ Updating existing contract: ${name}`)
     }
     const observation = await executeProbe(probe)
+    if (
+      observation.skipped ||
+      observation.timedOut ||
+      observation.exitCode === null ||
+      observation.exitCode === undefined
+    ) {
+      const reason =
+        observation.skipReason ||
+        (observation.timedOut ? 'timed out' : 'no exit code')
+      console.error(`Cannot accept probe '${name}': ${reason}`)
+      process.exit(1)
+    }
     const written = writeContract(probe, observation)
     const stderrLabel =
       observation.stderr.replace(/\s+$/, '') === '' ? 'empty' : 'present'
@@ -110,6 +122,18 @@ async function runAccept(repoRoot: string, command: string, probeArg?: string) {
       console.log(`↺ Updating existing contract: ${name}`)
     }
     const observation = await executeProbe(probe)
+    if (
+      observation.skipped ||
+      observation.timedOut ||
+      observation.exitCode === null ||
+      observation.exitCode === undefined
+    ) {
+      const reason =
+        observation.skipReason ||
+        (observation.timedOut ? 'timed out' : 'no exit code')
+      console.log(`⊘ Skipped contract for ${name}: ${reason}`)
+      continue
+    }
     writeContract(probe, observation)
     count++
   }

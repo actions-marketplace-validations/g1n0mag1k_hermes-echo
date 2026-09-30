@@ -44,5 +44,53 @@ def serve():
     time.sleep(9999)
 
 
+@cli.group()
+def env():
+    """Manage environments."""
+    pass
+
+
+@env.command()
+def show():
+    """Show available environments."""
+    click.echo("default")
+
+
+@env.command()
+def create():
+    """Create an environment."""
+    click.echo("created")
+
+
+@env.command()
+def prune():
+    """Prune unused environments."""
+    click.echo("pruned")
+
+
+@env.group()
+def deep():
+    """Nested group used to verify depth limit."""
+    pass
+
+
+@deep.command('nested')
+def deep_nested():
+    """Must not be auto-discovered (deeper than one level)."""
+    click.echo("too deep")
+
+
+@cli.group()
+def fmt():
+    """Format and lint."""
+    pass
+
+
+@fmt.command()
+def check():
+    """Check formatting without writing."""
+    click.echo("ok")
+
+
 def main():
     cli()

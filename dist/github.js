@@ -1,3 +1,4 @@
+import { formatDiffBlock, } from './diff.js';
 export const HERMES_ECHO_MARKER = '<!-- hermes-echo-marker -->';
 const COMMENT_MAX_LENGTH = 50_000;
 const OUTPUT_TRUNCATE_AT = 400;
@@ -69,6 +70,31 @@ function buildChangeComment(receipts) {
     sections.push('*[Hermes Echo](https://hermesrelay.dev/echo) · [what is this?](https://hermesrelay.dev/echo)*');
     return sections.join('\n');
 }
+function hasDiffContent(diff) {
+    if (!diff)
+        return false;
+    return (diff.added.length > 0 ||
+        diff.removed.length > 0 ||
+        diff.changed.length > 0);
+}
+function formatContractOutputDiff(contract) {
+    const blocks = [];
+    if (hasDiffContent(contract.stdoutDiff) &&
+        contract.expectedStdout !== undefined &&
+        contract.actualStdout !== undefined) {
+        const block = formatDiffBlock(contract.expectedStdout, contract.actualStdout, `**Stdout diff** (\`${contract.probe}\`):`);
+        if (block)
+            blocks.push(block);
+    }
+    if (hasDiffContent(contract.stderrDiff) &&
+        contract.expectedStderr !== undefined &&
+        contract.actualStderr !== undefined) {
+        const block = formatDiffBlock(contract.expectedStderr, contract.actualStderr, `**Stderr diff** (\`${contract.probe}\`):`);
+        if (block)
+            blocks.push(block);
+    }
+    return blocks.join('\n\n');
+}
 function buildContractsSection(contracts) {
     const verified = contracts.filter((c) => c.matches).length;
     const lines = [
@@ -78,6 +104,7 @@ function buildContractsSection(contracts) {
         '| Probe | Contract | Status |',
         '|-------|----------|--------|',
     ];
+    const driftBlocks = [];
     for (const contract of contracts) {
         const summary = contract.behavior ??
             (contract.matches ? 'per accepted contract' : '—');
@@ -86,6 +113,15 @@ function buildContractsSection(contracts) {
         if (!contract.matches && contract.notes.length > 0) {
             lines.push(`| | ${contract.notes.join('; ')} | |`);
         }
+        if (!contract.matches) {
+            const diff = formatContractOutputDiff(contract);
+            if (diff)
+                driftBlocks.push(diff);
+        }
+    }
+    if (driftBlocks.length > 0) {
+        lines.push('');
+        lines.push(...driftBlocks);
     }
     return lines.join('\n');
 }

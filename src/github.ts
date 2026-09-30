@@ -1,7 +1,11 @@
 import type { EchoReceipt } from './types.js'
 import type { EchoObservation } from './types.js'
 import type { Octokit } from '@octokit/rest'
-import type { EchoReceiptWithBase } from './diff.js'
+import {
+  formatDiffBlock,
+  type EchoReceiptWithBase,
+  type StructuredDiff,
+} from './diff.js'
 
 export const HERMES_ECHO_MARKER = '<!-- hermes-echo-marker -->'
 
@@ -11,6 +15,14 @@ export interface ContractCommentStatus {
   notes: string[]
   /** Shown in the Contract column, e.g. "exit 0, stderr empty". */
   behavior?: string
+  /** Accepted vs live stdout for drift rendering. */
+  expectedStdout?: string
+  actualStdout?: string
+  /** Accepted vs live stderr for drift rendering. */
+  expectedStderr?: string
+  actualStderr?: string
+  stdoutDiff?: StructuredDiff
+  stderrDiff?: StructuredDiff
 }
 
 const COMMENT_MAX_LENGTH = 50_000
@@ -108,6 +120,47 @@ function buildChangeComment(receipts: EchoReceipt[]): string {
   return sections.join('\n')
 }
 
+function hasDiffContent(diff?: StructuredDiff): boolean {
+  if (!diff) return false
+  return (
+    diff.added.length > 0 ||
+    diff.removed.length > 0 ||
+    diff.changed.length > 0
+  )
+}
+
+function formatContractOutputDiff(contract: ContractCommentStatus): string {
+  const blocks: string[] = []
+
+  if (
+    hasDiffContent(contract.stdoutDiff) &&
+    contract.expectedStdout !== undefined &&
+    contract.actualStdout !== undefined
+  ) {
+    const block = formatDiffBlock(
+      contract.expectedStdout,
+      contract.actualStdout,
+      `**Stdout diff** (\`${contract.probe}\`):`
+    )
+    if (block) blocks.push(block)
+  }
+
+  if (
+    hasDiffContent(contract.stderrDiff) &&
+    contract.expectedStderr !== undefined &&
+    contract.actualStderr !== undefined
+  ) {
+    const block = formatDiffBlock(
+      contract.expectedStderr,
+      contract.actualStderr,
+      `**Stderr diff** (\`${contract.probe}\`):`
+    )
+    if (block) blocks.push(block)
+  }
+
+  return blocks.join('\n\n')
+}
+
 function buildContractsSection(contracts: ContractCommentStatus[]): string {
   const verified = contracts.filter((c) => c.matches).length
   const lines: string[] = [
@@ -118,6 +171,8 @@ function buildContractsSection(contracts: ContractCommentStatus[]): string {
     '|-------|----------|--------|',
   ]
 
+  const driftBlocks: string[] = []
+
   for (const contract of contracts) {
     const summary =
       contract.behavior ??
@@ -127,6 +182,15 @@ function buildContractsSection(contracts: ContractCommentStatus[]): string {
     if (!contract.matches && contract.notes.length > 0) {
       lines.push(`| | ${contract.notes.join('; ')} | |`)
     }
+    if (!contract.matches) {
+      const diff = formatContractOutputDiff(contract)
+      if (diff) driftBlocks.push(diff)
+    }
+  }
+
+  if (driftBlocks.length > 0) {
+    lines.push('')
+    lines.push(...driftBlocks)
   }
 
   return lines.join('\n')
