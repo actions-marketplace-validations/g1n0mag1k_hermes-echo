@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { installProject } from './install.js'
-import { runnerPath } from './runner-env.js'
+import { withRunnerPath } from './runner-env.js'
 import { discoverProbes } from './discover.js'
 
 export interface DoctorCheck {
@@ -47,7 +47,9 @@ function runCommand(
     const child = spawn(command, args, {
       cwd: options?.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PATH: runnerPath() },
+      // withRunnerPath extends PATH (incl. Windows Python Scripts) and
+      // avoids Path/PATH key collisions that break inheritance on Windows.
+      env: withRunnerPath(),
     })
 
     const timer = setTimeout(() => {
@@ -156,7 +158,9 @@ export async function runDoctor(
   })
 
   // CHECK 5: Command found in PATH
-  const which = await runCommand('which', [command])
+  // Windows uses `where`; Unix uses `which`.
+  const finder = process.platform === 'win32' ? 'where' : 'which'
+  const which = await runCommand(finder, [command])
   const whichOk = which.exitCode === 0
   checks.push({
     name: 'Command found in PATH',
