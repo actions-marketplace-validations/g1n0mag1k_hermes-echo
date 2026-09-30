@@ -94,7 +94,9 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# Track compiled output for GitHub Action + npm publish
+# dist
+!dist/
 .output
 
 # Gatsby files
@@ -155,3 +157,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+dist-action/
