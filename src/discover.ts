@@ -352,7 +352,7 @@ export async function discoverProbes(
 
     candidates.push({
       args: bareArgs,
-      confidence: 50,
+      confidence: 70,
       source: 'baseline',
     })
   }
